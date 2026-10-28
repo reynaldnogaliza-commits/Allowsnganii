@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AllowTrack</title>
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"><meta name="theme-color" content="#0b4f3c">
+<style>
+:root{--bg:#f2f5f1;--ink:#14231f;--mut:#5d6f68;--g:#0b4f3c;--a:#f2b134;--c:#fff;--ln:#d5ded9;--red:#b42318}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1a16;--ink:#e6efeb;--mut:#93a79f;--c:#16261f;--ln:#27403a;--g:#2fa57d;--red:#ff8a7a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Trebuchet MS",system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:0 14px 40px}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 0}
+nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px}
+nav button{background:none;color:var(--ink);border:1px solid var(--ln);padding:8px 14px;border-radius:99px;cursor:pointer;white-space:nowrap}
+nav button.on{background:var(--g);color:#fff;border-color:var(--g)}
+.card{background:var(--c);border:1px solid var(--ln);border-radius:10px;padding:14px;margin:10px 0}
+.hero{background:var(--g);color:#fff;border-radius:10px;padding:18px;margin:10px 0}
+.hero b{display:block;font-size:2.2rem;color:var(--a);line-height:1.1}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid .card{margin:0}
+h2,h3{margin:.2em 0}h3{margin-top:1.2em}
+label{display:block;margin:8px 0;font-size:.9rem;color:var(--mut)}
+input,select,button{font:inherit}
+input,select{display:block;width:100%;padding:10px;margin-top:4px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--ink)}
+button.pri,#app>.card button{background:var(--g);color:#fff;border:0;padding:11px 18px;border-radius:8px;cursor:pointer;margin-top:6px}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.mut{color:var(--mut)}.err,.neg{color:var(--red)}.pos{color:var(--g)}
+.item{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--ln)}
+.item>div:last-child{text-align:right;white-space:nowrap}
+.tr{height:10px;background:var(--ln);border-radius:9px;overflow:hidden}.tr i{display:block;height:100%;background:var(--g)}
+.over .tr i{background:var(--red)}.warn .tr i{background:var(--a)}
+.bl{display:flex;justify-content:space-between;font-size:.9rem;margin:10px 0 3px}
+.chip{background:var(--a);color:#14231f;border:0;border-radius:99px;padding:7px 14px;margin:4px 6px 4px 0;cursor:pointer;font-weight:700}
+a{color:var(--g)}img.pv{max-width:100%;max-height:180px;border-radius:8px;margin-top:6px}
+:focus-visible{outline:3px solid var(--a);outline-offset:2px}
+</style></head><body>
+<main id="app"></main>
+<script src="vendor/tesseract.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),LS=localStorage,
+CATS=['Food','Transportation','School Supplies','Rent','Utilities','Other'],
+SRC=['Parents/Guardian','Scholarship','Part-time Work','Other'];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const peso=n=>'₱'+(+n).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const t0=today(),ym=t0.slice(0,7),last=new Date(+t0.slice(0,4),+t0.slice(5,7),0).getDate();
+let U=sessionStorage.sa_u||null,D=null,tab='dash',edit=null,mode='login',W=null,
+P={from:ym+'-01',to:ym+'-'+String(last).padStart(2,'0')},F={from:'',to:'',cat:'',type:''};
+const users=()=>JSON.parse(LS.sa_users||'{}'),save=()=>LS['sa_d_'+U]=JSON.stringify(D),
+load=()=>{D=JSON.parse(LS['sa_d_'+U]||'{"tx":[],"bud":[]}')},
+msg=t=>{const e=$('#m');if(e)e.textContent=t},
+sum=(a,t)=>a.filter(x=>x.type==t).reduce((s,x)=>s+x.amt,0),
+opts=(t,s)=>(t=='income'?SRC:CATS).map(c=>`<option ${c==s?'selected':''}>${c}</option>`).join('');
+
+async function hash(p,s){const e=new TextEncoder(),k=await crypto.subtle.importKey('raw',e.encode(p),'PBKDF2',false,['deriveBits']),
+b=await crypto.subtle.deriveBits({name:'PBKDF2',salt:e.encode(s),iterations:100000,hash:'SHA-256'},k,256);
+return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function auth(){const u=$('#u').value.trim().toLowerCase(),p=$('#p').value,us=users();
+ if(!u||p.length<6)return msg('Enter a username and a password of at least 6 characters.');
+ if(mode=='reg'){if(us[u])return msg('That username is already taken.');const s=crypto.randomUUID();us[u]={s,h:await hash(p,s)};LS.sa_users=JSON.stringify(us)}
+ else if(!us[u]||us[u].h!==await hash(p,us[u].s))return msg('Wrong username or password.');
+ U=u;sessionStorage.sa_u=u;load();tab='dash';render()}
+function logout(){sessionStorage.removeItem('sa_u');U=D=null;render()}
+
+function bar(l,v,m,t,c=''){return `<div class="${c}"><div class=bl><span>${esc(l)}</span><span>${t}</span></div><div class=tr><i style="width:${Math.min(100,v/m*100)}%"></i></div></div>`}
+function budRow(b,del){const sp=sum(D.tx.filter(x=>x.date>=b.from&&x.date<=b.to&&(b.cat=='All'||x.cat==b.cat)),'expense'),left=b.amt-sp;
+ return `<div class=card>${bar(b.cat+' · '+b.from+' to '+b.to,sp,b.amt,peso(sp)+' / '+peso(b.amt),left<0?'over':sp>=b.amt*.8?'warn':'')}
+ <p class="${left<0?'err':'mut'}" style="margin:6px 0 0">${left<0?'Over budget by '+peso(-left):'Remaining '+peso(left)}${del?` · <a href=# onclick="delBud(${b.id});return false">Delete</a>`:''}</p></div>`}
+
+const V={
+dash(){const t=D.tx.filter(x=>x.date>=P.from&&x.date<=P.to),inc=sum(t,'income'),exp=sum(t,'expense'),bc={};
+ t.filter(x=>x.type=='expense').forEach(x=>bc[x.cat]=(bc[x.cat]||0)+x.amt);
+ const mx=Math.max(1,...Object.values(bc)),bs=D.bud.filter(b=>b.from<=P.to&&b.to>=P.from);
+ return `<div class=hero><span>Remaining balance for this period</span><b>${peso(inc-exp)}</b></div>
+ <div class=row><label>From<input type=date value="${P.from}" onchange="P.from=this.value;render()"></label><label>To<input type=date value="${P.to}" onchange="P.to=this.value;render()"></label></div>
+ <div class=grid><div class=card><span class=mut>Allowance</span><h2>${peso(inc)}</h2></div><div class=card><span class=mut>Expenses</span><h2>${peso(exp)}</h2></div></div>
+ <h3>Spending by category</h3><div class=card>${Object.keys(bc).map(c=>bar(c,bc[c],mx,peso(bc[c]))).join('')||'<span class=mut>No expenses in this period. Add one in the Add tab.</span>'}</div>
+ <h3>Budgets in this period</h3>${bs.map(b=>budRow(b)).join('')||'<p class=mut>No budget covers this period. Set one in the Budgets tab.</p>'}`},
+add(){const e=edit?D.tx.find(x=>x.id==edit):{type:'expense',amt:'',date:t0,cat:CATS[0],desc:''};
+ return `<div class=card><label>Type<select id=ty onchange="$('#ct').innerHTML=opts(this.value);$('#ocr').hidden=this.value=='income'"><option value=expense ${e.type=='expense'?'selected':''}>Expense</option><option value=income ${e.type=='income'?'selected':''}>Allowance</option></select></label>
+ <div id=ocr ${e.type=='income'?'hidden':''}><label>Scan a receipt or price tag (works offline)<input type=file accept="image/*" onchange="ocr(this.files[0])"></label><img id=pv class=pv hidden alt="Selected image"><p id=os class=mut></p><div id=chips></div></div>
+ <label>Amount (₱)<input id=am type=number step=0.01 min=0 value="${e.amt}"></label>
+ <label>Date<input id=dt type=date value="${e.date}"></label>
+ <label>Category or source<select id=ct>${opts(e.type,e.cat)}</select></label>
+ <label>Description<input id=ds value="${esc(e.desc)}"></label><p id=m class=err></p><button class=pri onclick="saveTx()">Save</button></div>`},
+hist(){const t=D.tx.filter(x=>(!F.from||x.date>=F.from)&&(!F.to||x.date<=F.to)&&(!F.cat||x.cat==F.cat)&&(!F.type||x.type==F.type)).sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+ return `<div class=row><label>From<input type=date value="${F.from}" onchange="F.from=this.value;render()"></label><label>To<input type=date value="${F.to}" onchange="F.to=this.value;render()"></label></div>
+ <div class=row><label>Category<select onchange="F.cat=this.value;render()"><option value="">All</option>${[...new Set([...CATS,...SRC])].map(c=>`<option ${c==F.cat?'selected':''}>${c}</option>`).join('')}</select></label>
+ <label>Type<select onchange="F.type=this.value;render()"><option value="">All</option><option value=income ${F.type=='income'?'selected':''}>Allowance</option><option value=expense ${F.type=='expense'?'selected':''}>Expense</option></select></label></div>
+ <div class=card>${t.map(x=>`<div class=item><div><b>${esc(x.desc||x.cat)}</b><br><span class=mut>${x.date} · ${esc(x.cat)}</span></div><div><span class="${x.type=='income'?'pos':'neg'}">${x.type=='income'?'+':'−'}${peso(x.amt)}</span><br><a href=# onclick="startEdit(${x.id});return false">Edit</a> · <a href=# onclick="delTx(${x.id});return false">Delete</a></div></div>`).join('')||'<span class=mut>No transactions match. Add one or clear the filters.</span>'}</div>`},
+bud(){return `<div class=card><label>Category<select id=bc><option>All</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select></label>
+ <label>Spending limit (₱)<input id=ba type=number min=1 step=0.01></label>
+ <div class=row><label>From<input id=bf type=date value="${P.from}"></label><label>To<input id=bt type=date value="${P.to}"></label></div><p id=m class=err></p><button class=pri onclick=addBud()>Set budget</button></div>${D.bud.map(b=>budRow(b,1)).join('')}`},
+set(){return `<div class=card><p>Records are stored only on this device. Save a backup so they are not lost if the device is reset or damaged.</p><button class=pri onclick=exp()>Download backup</button>
+ <label>Restore from backup<input type=file accept=".json" onchange="imp(this.files[0])"></label></div>`}};
+
+function render(){
+ if(!U){$('#app').innerHTML=`<div class=card style="max-width:380px;margin:10vh auto"><h2>AllowTrack</h2><p class=mut>Track your allowance and expenses offline.</p>
+ <input id=u placeholder="Username" autocapitalize=off autocomplete=username><input id=p type=password placeholder="Password (6+ characters)" style="margin-top:8px" autocomplete=current-password>
+ <p id=m class=err></p><button onclick=auth()>${mode=='reg'?'Register':'Log in'}</button>
+ <p><a href=# onclick="mode=mode=='reg'?'login':'reg';render();return false">${mode=='reg'?'Already registered? Log in':'New here? Register'}</a></p></div>`;return}
+ const T={dash:'Dashboard',add:edit?'Edit entry':'Add',hist:'History',bud:'Budgets',set:'Backup'};
+ $('#app').innerHTML=`<header><b>AllowTrack</b><span class=mut>${esc(U)} · <a href=# onclick="logout();return false">Log out</a></span></header>
+ <nav>${Object.keys(T).map(k=>`<button class="${k==tab?'on':''}" onclick="tab='${k}';edit=null;render()">${T[k]}</button>`).join('')}</nav>${V[tab]()}`}
+
+function saveTx(){const a=+$('#am').value,o={type:$('#ty').value,amt:Math.round(a*100)/100,date:$('#dt').value,cat:$('#ct').value,desc:$('#ds').value.trim()};
+ if(!(a>0)||!o.date)return msg('Enter an amount above 0 and a date.');
+ edit?Object.assign(D.tx.find(x=>x.id==edit),o):D.tx.push({id:Date.now(),...o});
+ save();edit=null;tab='hist';render()}
+function startEdit(id){edit=id;tab='add';render()}
+function delTx(id){if(confirm('Delete this transaction?')){D.tx=D.tx.filter(x=>x.id!=id);save();render()}}
+function addBud(){const a=+$('#ba').value,b={id:Date.now(),cat:$('#bc').value,amt:a,from:$('#bf').value,to:$('#bt').value};
+ if(!(a>0)||!b.from||!b.to||b.from>b.to)return msg('Enter a limit above 0 and a valid date range.');
+ D.bud.push(b);save();render()}
+function delBud(id){if(confirm('Delete this budget?')){D.bud=D.bud.filter(b=>b.id!=id);save();render()}}
+function exp(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(D)],{type:'application/json'}));a.download=`allowtrack-${U}-${today()}.json`;a.click()}
+function imp(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.tx)||!Array.isArray(d.bud))throw 0;D=d;save();alert('Backup restored.');render()}catch{alert('This is not a valid AllowTrack backup.')}};r.readAsText(f)}
+
+function prices(t){const r=[];const add=(v,tot)=>{if(!(v>0&&v<1e6))return;const e=r.find(x=>x.v==v);e?e.tot=e.tot||tot:r.push({v,tot})};
+ t.split('\n').forEach(l=>{const tot=/total|amount due|grand/i.test(l);
+  (l.replace(/(\d),(\d{3})/g,'$1$2').match(/\d+[.,]\d{2}(?!\d)/g)||[]).forEach(m=>add(+m.replace(',','.'),tot));
+  (l.match(/(?:₱|PHP|P)\s?(\d+)(?![\d.,])/g)||[]).forEach(m=>add(+m.replace(/\D/g,''),tot))});
+ return r.sort((a,b)=>b.tot-a.tot||b.v-a.v)}
+async function ocr(f){if(!f)return;const s=$('#os'),c=$('#chips'),pv=$('#pv');c.innerHTML='';pv.src=URL.createObjectURL(f);pv.hidden=false;s.textContent='Loading OCR…';
+ try{const B=new URL('vendor/',location.href).href;
+  W=W||await Tesseract.createWorker('eng',1,{workerPath:B+'worker.min.js',corePath:B,langPath:B,logger:m=>{const e=$('#os');if(e&&m.status=='recognizing text')e.textContent='Reading image… '+Math.round(m.progress*100)+'%'}});
+  const {data:{text}}=await W.recognize(f),p=prices(text);
+  if(!p.length){$('#os').textContent='No price found. Enter the amount manually.';return}
+  $('#chips').innerHTML=p.map(x=>`<button class=chip onclick="$('#am').value=${x.v}">${peso(x.v)}${x.tot?' (total)':''}</button>`).join('');
+  if(p[0].tot)$('#am').value=p[0].v;
+  $('#os').textContent='Tap the correct price or type it, then check the amount before saving.'}
+ catch(e){$('#os').textContent='OCR failed. Enter the amount manually.'}}
+
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if(U&&!LS['sa_d_'+U]&&!users()[U])U=null;else if(U)load();
+render();
+</script></body></html>
